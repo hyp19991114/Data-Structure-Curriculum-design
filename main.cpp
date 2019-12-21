@@ -17,82 +17,189 @@
 #include <queue>
 using namespace std;
 
-#define MAXSIZE 200   // 最大顶点数
+#define MAXSIZE 100   // 最大顶点数
 #define INF 0x3f3f3f3f   // 无穷大
 enum vehicle_type { subway, normal_bus, air_bus, none = INF };
 
-struct vertex
+struct edge
 {
 	string name;
-	vector<string> line;   // 这一点经过的所有线路
+	vehicle_type type;
+	edge():type(none) {}
+	edge(char _name[], vehicle_type _type):name(_name), type(_type) {}
 };
 
 class graph
 {
 private:
 	int vertexNum;   // 总顶点数
-	vertex vertices[MAXSIZE];   // 顶点信息
+	string vertices[MAXSIZE];   // 顶点信息
 	unordered_map<string, size_t> index;   // 根据顶点信息找到对应下标
-	vehicle_type adjM[MAXSIZE][MAXSIZE];   // 邻接矩阵
-	int timeLT[MAXSIZE][MAXSIZE], pathLT[MAXSIZE][MAXSIZE];   // 保存"时间短"换乘方案结果
+	edge adjM[MAXSIZE][MAXSIZE];   // 邻接矩阵
 	bool insertVertex(string station_name);   // 增加顶点
+	int findMin(int dist[], bool collected[]);   // lessTime()的辅助函数
 public:
-	graph();
-	bool insertEdge(string edge1_name, string edge2_name, vehicle_type weight);   // 插入边
-	void lessTime_calculate();   // 预先计算"时间短"换乘方案，查询时可直接输出
-	void lessTime(string src_name, string dst_name);   // "时间短"换乘方案
-	void lessCost(string src_name, string dst_name);   // "价格低"换乘方案
-	void lessTransfer(string src_name, string dst_name);   // "价格低"换乘方案
+	graph():vertexNum(0) {};
+	bool isVertexInGraph(string vertex_name);   // 判断某点是否在图内
+	bool insertEdge(string vertex1_name, string vertex2_name, edge new_edge);   // 插入边
+	void lessTime(string src_name, string dst_name);   // 输出"时间短"换乘方案
+	void lessTransfer(string src_name, string dst_name);   // 输出"少换乘"换乘方案
+	void lessCost(string src_name, string dst_name);   // 输出"价格低"换乘方案
+
+	friend void test(const graph &g);   // test
 };
 
-bool graph::insertVertex(string station_name)
+bool graph::isVertexInGraph(string vertex_name)
 {
-	if(index.find(station_name) != index.end())   // 已有该顶点，无需插入
+	return (index.find(vertex_name) != index.end());
+}
+bool graph::insertVertex(string vertex_name)
+{
+	if(isVertexInGraph(vertex_name))   // 已有该顶点，无需插入
 		return false;
-	vertices[vertexNum].name = station_name;   // 增加一个顶点并初始化相关信息
-	index[station_name] = vertexNum;
+	vertices[vertexNum] = vertex_name;   // 增加一个顶点并初始化相关信息
+	index[vertex_name] = vertexNum;
 	vertexNum++;
 	return true;
 }
-bool graph::insertEdge(string vertex1_name, string vertex2_name, vehicle_type weight)
+bool graph::insertEdge(string vertex1_name, string vertex2_name, edge new_edge)
 {
 	insertVertex(vertex1_name);
 	insertVertex(vertex2_name);
 	size_t vertex1_index = index[vertex1_name], vertex2_index = index[vertex2_name];
-	if(adjM[vertex1_index][vertex2_index] != INF)   // 已有这条边，无需插入
+	if(adjM[vertex1_index][vertex2_index].type != none)   // 已有这条边，无需插入
 		return false;
-	adjM[vertex1_index][vertex2_index] = weight;   // 插入新边
-	adjM[vertex2_index][vertex1_index] = weight;
+	adjM[vertex1_index][vertex2_index] = new_edge;   // 插入新边
+	adjM[vertex2_index][vertex1_index] = new_edge;
 	return true;
 }
-graph::graph()
+int graph::findMin(int time[], bool collected[])
 {
-	vertexNum = 0;
-	for(int i = 0; i < MAXSIZE; i++)
-		for(int j = 0; j < MAXSIZE; j++)
-			adjM[i][j] = none;
-}
-void graph::lessTime_calculate()
-{
+	int min_index, min_time = INF;
 	for(int i = 0; i < vertexNum; i++)
-		for(int j = 0; j < vertexNum; j++)
-			switch(adjM[i][j])
-			{
-				case subway:     timeLT[i][j] = 3; break;   // 地铁3min走一站
-				case normal_bus: timeLT[i][j] = 7; break;   // 公交7min走一站
-				case air_bus:    timeLT[i][j] = 7; break;
-				case none:       timeLT[i][j] = INF; break;   // 没有直达路径，初始化为INF
-			}
-	memset(pathLT, -1, sizeof(pathLT));
-	for(int k = 0; k < vertexNum; k++)
-		for(int i = 0; i < vertexNum; i++)
-			for(int j = 0; j < vertexNum; j++)
-				if(timeLT[i][k] + timeLT[k][j] < timeLT[i][j])
-				{
-					timeLT[i][j] = timeLT[i][k] + timeLT[k][j];
-					pathLT[i][j] = k;
-				}
+	{
+		if(collected[i] == false && time[i] < min_time)
+		{
+			min_time = time[i];
+			min_index = i;
+		}
+	}
+	return min_time == INF ? -1 : min_index;   // 未找到返回-1
 }
+void graph::lessTime(string src_name, string dst_name)
+{
+	system("title 交通换乘规划 - 时间最短的乘车方案");
+	size_t src = index[src_name], dst = index[dst_name];
+	int time[MAXSIZE], path[MAXSIZE];
+	bool collected[MAXSIZE];
+	for(int i = 0; i < vertexNum; i++)
+	{
+		switch(adjM[src][i].type)
+		{
+			case subway:     time[i] = 3; break;   // 地铁3min走一站
+			case normal_bus: time[i] = 7; break;   // 公交7min走一站
+			case air_bus:    time[i] = 7; break;
+			case none:       time[i] = none; break;   // 没有直达路径，初始化为none(用无穷大表示)
+		}
+		if(time[i] != none)   // 与起点直接相连的点
+			path[i] = src;
+		else
+			path[i] = -1;
+		collected[i] = false;
+	}
+	time[src] = 0;
+	collected[src] = true;
+	while(true)
+	{
+		int min = findMin(time, collected);
+		if(min == -1)
+			break;
+		collected[min] = true;
+		for(int i = 0; i < vertexNum; i++)
+		{
+			if(collected[i] == false && adjM[min][i].type != none)
+			{
+				int new_time;
+				switch(adjM[min][i].type)
+				{
+					case subway:     new_time = 3; break;
+					case normal_bus: new_time = 7; break;
+					case air_bus:    new_time = 7; break;
+				}
+				if(time[min] + new_time < time[i])
+				{
+					time[i] = time[min] + new_time;
+					path[i] = min;
+				}
+			}
+		}
+	}
+	if(time[dst] == INF)
+	{
+		printf("从 %s 到 %s 暂无换乘路径，建议您使用其它出行方式。\n\n",
+			src_name.c_str(), dst_name.c_str());
+		system("pause");
+		return;
+	}
+	size_t temp = dst;
+	stack<size_t> st;   // 用于暂存最短路径
+	st.push(dst);
+	while(path[temp] != -1)
+	{
+		st.push(path[temp]);
+		temp = path[temp];
+	}
+	printf("从 %s 到 %s 时间最短的乘车方案：\n\n", src_name.c_str(), dst_name.c_str());
+	temp = st.top();
+	st.pop();
+	string line;
+	vehicle_type type = none;
+	int cost = 0, subwayStation_cnt = 0;   // 所需费用，乘坐地铁站数
+	while(true)
+	{
+		cout << vertices[temp];
+		if(st.empty() || adjM[temp][st.top()].name != line)
+		{
+			if(st.empty() || adjM[temp][st.top()].type != type)
+			{   // 在终点处或改换交通方式时计算费用
+				if(type == subway)   // 地铁按乘坐站数收费
+				{
+					if(subwayStation_cnt <= 7)   // 0-7站，3元
+						cost += 3;
+					else if(subwayStation_cnt <= 14)   // 8-14站，5元
+						cost += 5;
+					else   // 大于14站，8元
+						cost += 8;
+					subwayStation_cnt = 0;
+				}
+				else if(type == normal_bus)   // 普通公交1元
+					cost += 1;
+				else if(type == air_bus)   // 空调公交2元
+					cost += 2;
+			}
+
+			if(st.empty())   // 在终点处退出循环
+				break;
+			line = adjM[temp][st.top()].name;   // 在换乘站更新换乘信息
+			type = adjM[temp][st.top()].type;
+			cout << "（" << line << "）";
+		}
+		if(adjM[temp][st.top()].type == subway)   // 乘坐地铁要累计站数
+			subwayStation_cnt++;
+		temp = st.top();
+		st.pop();
+		cout << " -> ";
+	}
+	cout << endl << "总用时：" << time[dst] << "分钟，";
+	cout << "费用：" << cost << "元" << endl << endl;
+	system("pause");
+}
+void graph::lessTransfer(string src_name, string dst_name)
+{
+
+}
+void graph::lessCost(string src_name, string dst_name) {}
+
 
 graph map;
 void loadMap()   // 加载地图
@@ -103,46 +210,93 @@ void loadMap()   // 加载地图
 	char mapFileName[256];
 	cin.getline(mapFileName, 256);
 	FILE *fp = fopen(mapFileName, "r");
-	while(fp == NULL)
+	while(fp == NULL)   // 若文件打开失败，则重新输入文件名直至打开成功
 	{
 		printf("\n文件打开失败，请检查文件名是否输入正确以及文件是否存在。\n\n");
 		printf("请重新输入：");
 		cin.getline(mapFileName, 256);
-		FILE *fp = fopen(mapFileName, "r");
+		fp = fopen(mapFileName, "r");
 	}
-	printf("\n请稍候...\n\n");
+	printf("\n请稍候. . . \n\n");
 	int n;
 	fscanf(fp, "%d", &n);
-	string name;   // 线路名称
+	char name[256];   // 线路名称
 	int num, type, isCycle;   // 线路站点数  地铁0/普通公交1/空调公交2  是否环线
 	for(int i = 0; i < n; i++)
 	{
-		cin >> name >> num >> type >> isCycle;
-		string v1, v2;
+		fscanf(fp, "%s%d%d%d\n", name, &num, &type, &isCycle);
+		char v1[256], v2[256];
 		for(int j = 0; j < num - 1 + isCycle; j++)
 		{
-			cin >> v1 >> v2;
-			map.insertEdge(v1, v2, (vehicle_type)type);
+			fscanf(fp, "%s%s\n", v1, v2);
+			map.insertEdge(v1, v2, edge(name, (vehicle_type)type));
 		}
 	}
 	fclose(fp);
-	map.lessTime_calculate();
 	printf("地图加载成功。");
 	system("pause");
 }
 
+void test(const graph &g)
+{
+
+}
 int main1()
 {
 	system("color fc");
 	loadMap();
-
-	char choice[256];
+	string src, dst, choice;
 	while(true)
 	{
 		system("cls");
 		system("title 交通换乘规划");
 		fflush(stdin);
+		printf("     交通换乘规划\n");
 
+		printf("\n请输入起点：");
+		getline(cin, src);
+		while(!map.isVertexInGraph(src))   // 未找到这个起点
+		{
+			if(src.size() > 2   // 长度大于2
+				&& src.substr(src.size() - 2, src.size()) == "站"   // 最后一个字是"站"
+				&& map.isVertexInGraph(src.substr(0, src.size() - 2)))   // 去掉"站"字后该点存在
+			{
+				src = src.substr(0, src.size() - 2);   // 用户输入多了一个"站"字，去掉即可
+				break;
+			}
+			printf("\n未查找到您输入的地址，请重新输入起点：");
+			getline(cin, src);
+		}
+
+		printf("\n请输入终点：");
+		getline(cin, dst);
+		while(!map.isVertexInGraph(dst) || dst == src)   // 未找到这个终点或起点与终点相同
+		{
+			if(dst.size() > 2 && dst.substr(dst.size() - 2, dst.size()) == "站"
+				&& map.isVertexInGraph(dst.substr(0, dst.size() - 2))
+				&& dst.substr(0, dst.size() - 2) != src)   // 去掉"站"字后不与起点相同
+			{
+				dst = dst.substr(0, dst.size() - 2);   // 用户输入多了一个"站"字，去掉即可
+				break;
+			}
+			printf("\n未查找到您输入的地址或终点与起点相同，请重新输入终点：");
+			getline(cin, dst);
+		}
+
+		printf("\n请选择乘车方案：\n");
+		printf("     1 - 时间短\n");
+		printf("     2 - 少换乘\n");
+		printf("     3 - 价格低\n");
+		printf("\n请输入：");
+		getline(cin, choice);
+		switch(choice[0])
+		{
+			case '1':system("cls"); map.lessTime(src, dst);     break;
+			case '2':system("cls"); map.lessTransfer(src, dst); break;
+			case '3':system("cls"); map.lessCost(src, dst);     break;
+
+			default:printf("输入错误，请重新输入。"); system("pause"); break;
+		}
 	}
 
 	return 0;
@@ -150,9 +304,9 @@ int main1()
 
 int main()
 {
+	system("color fc");
+
 	main1();
-
-
 
 	return 0;
 }
