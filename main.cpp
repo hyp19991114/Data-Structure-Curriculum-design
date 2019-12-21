@@ -10,7 +10,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <iostream>
-#include <vector>
 #include <unordered_map>
 #include <string>
 #include <stack>
@@ -44,7 +43,7 @@ public:
 	bool insertEdge(string vertex1_name, string vertex2_name, edge new_edge);   // 插入边
 	void lessTime(string src_name, string dst_name);   // 输出"时间短"换乘方案
 	void lessTransfer(string src_name, string dst_name);   // 输出"少换乘"换乘方案
-	void lessCost(string src_name, string dst_name);   // 输出"价格低"换乘方案
+	void subwayOnly(string src_name, string dst_name);   // 输出"只坐地铁"换乘方案
 
 	friend void test(const graph &g);   // test
 };
@@ -136,7 +135,7 @@ void graph::lessTime(string src_name, string dst_name)
 	}
 	if(time[dst] == INF)
 	{
-		printf("从 %s 到 %s 暂无换乘路径，建议您使用其它出行方式。\n\n",
+		printf("从 %s 到 %s 暂无换乘路径，建议您采用其它出行方式。\n\n",
 			src_name.c_str(), dst_name.c_str());
 		system("pause");
 		return;
@@ -198,7 +197,74 @@ void graph::lessTransfer(string src_name, string dst_name)
 {
 
 }
-void graph::lessCost(string src_name, string dst_name) {}
+void graph::subwayOnly(string src_name, string dst_name)
+{
+	system("title 交通换乘规划 - 只坐地铁的乘车方案");
+	size_t src = index[src_name], dst = index[dst_name];
+	int dist[MAXSIZE], path[MAXSIZE];
+	memset(dist, -1, sizeof(dist));
+	memset(path, -1, sizeof(path));
+	dist[src] = 0;
+	queue<size_t> qu;
+	qu.push(src);
+	while(!qu.empty())
+	{
+		size_t t = qu.front();
+		qu.pop();
+		for(int i = 0; i < vertexNum; i++)
+		{
+			if(adjM[t][i].type == subway && dist[i] == -1)
+			{
+				dist[i] = dist[t] + 1;
+				path[i] = t;
+				qu.push(i);
+			}
+		}
+	}
+	if(dist[dst] == -1)
+	{
+		printf("从 %s 仅乘坐地铁无法到达 %s，建议您更换乘车方案或采用其它出行方式。\n\n",
+			src_name.c_str(), dst_name.c_str());
+		system("pause");
+		return;
+	}
+	size_t temp = dst;
+	stack<size_t> st;
+	st.push(dst);
+	while(path[temp] != -1)
+	{
+		st.push(path[temp]);
+		temp = path[temp];
+	}
+	printf("从 %s 到 %s 只坐地铁的乘车方案：\n\n", src_name.c_str(), dst_name.c_str());
+	temp = st.top();
+	st.pop();
+	string line;
+	while(true)
+	{
+		cout << vertices[temp];
+		if(st.empty())   // 到达终点，退出循环
+			break;
+		if(adjM[temp][st.top()].name != line)
+		{
+			line = adjM[temp][st.top()].name;   // 在换乘站更新换乘信息
+			cout << "（" << line << "）";
+		}
+		temp = st.top();
+		st.pop();
+		cout << " -> ";
+	}
+	cout << endl << "总用时：" << dist[dst] * 3 << "分钟，";
+	int cost;
+	if(dist[dst] <= 7)   // 0-7站，3元
+		cost = 3;
+	else if(dist[dst] <= 14)   // 8-14站，5元
+		cost = 5;
+	else   // 大于14站，8元
+		cost = 8;
+	cout << "费用：" << cost << "元" << endl << endl;
+	system("pause");
+}
 
 
 graph map;
@@ -286,14 +352,14 @@ int main1()
 		printf("\n请选择乘车方案：\n");
 		printf("     1 - 时间短\n");
 		printf("     2 - 少换乘\n");
-		printf("     3 - 价格低\n");
+		printf("     3 - 只坐地铁\n");
 		printf("\n请输入：");
 		getline(cin, choice);
 		switch(choice[0])
 		{
 			case '1':system("cls"); map.lessTime(src, dst);     break;
 			case '2':system("cls"); map.lessTransfer(src, dst); break;
-			case '3':system("cls"); map.lessCost(src, dst);     break;
+			case '3':system("cls"); map.subwayOnly(src, dst);     break;
 
 			default:printf("输入错误，请重新输入。"); system("pause"); break;
 		}
