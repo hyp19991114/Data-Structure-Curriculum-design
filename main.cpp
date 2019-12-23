@@ -14,6 +14,9 @@
 #include <string>
 #include <stack>
 #include <queue>
+#include <set>
+#include <algorithm>
+#include <iterator>
 using namespace std;
 
 #define MAXSIZE 100   // 最大顶点数
@@ -28,6 +31,11 @@ struct edge
 	edge(char _name[], vehicle_type _type):name(_name), type(_type) {}
 };
 
+struct line
+{
+
+};
+
 class graph
 {
 private:
@@ -37,6 +45,7 @@ private:
 	edge adjM[MAXSIZE][MAXSIZE];   // 邻接矩阵
 	bool insertVertex(string station_name);   // 增加顶点
 	int findMin(int dist[], bool collected[]);   // lessTime()的辅助函数
+	void lessTransfer_print(size_t src, size_t dst, vector<set<string>> line);   // subwayOnly()的辅助函数
 public:
 	graph():vertexNum(0) {};
 	bool isVertexInGraph(string vertex_name);   // 判断某点是否在图内
@@ -44,8 +53,6 @@ public:
 	void lessTime(string src_name, string dst_name);   // 输出"时间短"换乘方案
 	void lessTransfer(string src_name, string dst_name);   // 输出"少换乘"换乘方案
 	void subwayOnly(string src_name, string dst_name);   // 输出"只坐地铁"换乘方案
-
-	friend void test(const graph &g);   // test
 };
 
 bool graph::isVertexInGraph(string vertex_name)
@@ -195,7 +202,90 @@ void graph::lessTime(string src_name, string dst_name)
 }
 void graph::lessTransfer(string src_name, string dst_name)
 {
-
+	size_t src = index[src_name], dst = index[dst_name];
+	set<string> ls, le;   // 经过起点/终点的线路
+	for(int i = 0; i < vertexNum; i++)   // 计算集合ls，le
+	{
+		if(!adjM[src][i].name.empty())
+			ls.insert(adjM[src][i].name);
+		if(!adjM[dst][i].name.empty())
+			le.insert(adjM[dst][i].name);
+	}
+	set<string> ls_le;   // ls与le的交集
+	set_intersection(ls.begin(), ls.end(), le.begin(), le.end(),
+		inserter(ls_le, ls_le.begin()));   // 计算交集
+	if(!ls_le.empty())   // 有直达线路
+	{
+		lessTransfer_print(src, dst, vector<set<string>>{ls_le});
+		return;
+	}
+	set<size_t> ms;   // 从起点乘车能直达的站点
+	for(auto line : ls)   // 计算集合ms
+	{
+		for(int i = 0; i < vertexNum; i++)
+			for(int j = 0; j < i; j++)   // 遍历半个邻接矩阵
+				if(adjM[i][j].name == line)
+				{
+					ms.insert(i);
+					ms.insert(j);
+				}
+	}
+	set<string> lms;   // ms中的站点所经过的路线
+	for(auto v : ms)   // 计算集合lms
+	{
+		for(int i = 0; i < vertexNum; i++)
+			if(!adjM[v][i].name.empty())
+				lms.insert(adjM[v][i].name);
+	}
+	set<string> lms_le;   // lms与le交集
+	set_intersection(lms.begin(), lms.end(), le.begin(), le.end(),
+		inserter(lms_le, lms_le.begin()));
+	if(!lms_le.empty())   // 有一次换乘线路
+	{
+		lessTransfer_print(src, dst, vector<set<string>>{ls, lms_le});
+		return;
+	}
+	set<size_t> me;   // 能乘车直达终点的站点
+	for(auto line : le)   // 计算集合me
+	{
+		for(int i = 0; i < vertexNum; i++)
+			for(int j = 0; j < i; j++)   // 遍历半个邻接矩阵
+				if(adjM[i][j].name == line)
+				{
+					me.insert(i);
+					me.insert(j);
+				}
+	}
+	set<string> lme;   // me中的站点所经过的路线
+	for(auto v : me)   // 计算集合lme
+	{
+		for(int i = 0; i < vertexNum; i++)
+			if(!adjM[v][i].name.empty())
+				lme.insert(adjM[v][i].name);
+	}
+	set<string> lms_lme;   // lms与lme交集
+	set_intersection(lms.begin(), lms.end(), lme.begin(), lme.end(),
+		inserter(lms_lme, lms_lme.begin()));
+	if(!lms_lme.empty())   // 有二次换乘线路
+	{
+		lessTransfer_print(src, dst, vector<set<string>>{ls, lms_lme, le});
+		return;
+	}
+	printf("从 %s 到 %s 换乘次数较多，建议您选择\"时间短\"换乘方案。\n\n",
+		src_name.c_str(), dst_name.c_str());
+	system("pause");
+}
+void graph::lessTransfer_print(size_t src, size_t dst, vector<set<string>> line)
+{
+	for(auto x : line)
+	{
+		for(auto y : x)
+		{
+			cout << y << "  ";
+		}
+		cout << " -> ";
+	}
+	system("pause");
 }
 void graph::subwayOnly(string src_name, string dst_name)
 {
@@ -302,10 +392,39 @@ void loadMap()   // 加载地图
 	printf("地图加载成功。");
 	system("pause");
 }
-
-void test(const graph &g)
+void inputSrc(string &src)   // 输入起点
 {
-
+	printf("\n请输入起点：");
+	getline(cin, src);
+	while(!map.isVertexInGraph(src))   // 未找到这个起点
+	{
+		if(src.size() > 2   // 长度大于2
+			&& src.substr(src.size() - 2, src.size()) == "站"   // 最后一个字是"站"
+			&& map.isVertexInGraph(src.substr(0, src.size() - 2)))   // 去掉"站"字后该点存在
+		{
+			src = src.substr(0, src.size() - 2);   // 用户输入多了一个"站"字，去掉即可
+			break;
+		}
+		printf("\n未查找到您输入的地址，请重新输入起点：");
+		getline(cin, src);
+	}
+}
+void inputDst(string &dst, const string &src)   // 输入终点
+{
+	printf("\n请输入终点：");
+	getline(cin, dst);
+	while(!map.isVertexInGraph(dst) || dst == src)   // 未找到这个终点或起点与终点相同
+	{
+		if(dst.size() > 2 && dst.substr(dst.size() - 2, dst.size()) == "站"
+			&& map.isVertexInGraph(dst.substr(0, dst.size() - 2))
+			&& dst.substr(0, dst.size() - 2) != src)   // 去掉"站"字后不与起点相同
+		{
+			dst = dst.substr(0, dst.size() - 2);   // 用户输入多了一个"站"字，去掉即可
+			break;
+		}
+		printf("\n未查找到您输入的地址或终点与起点相同，请重新输入终点：");
+		getline(cin, dst);
+	}
 }
 int main1()
 {
@@ -316,39 +435,10 @@ int main1()
 	{
 		system("cls");
 		system("title 交通换乘规划");
-		fflush(stdin);
 		printf("     交通换乘规划\n");
-
-		printf("\n请输入起点：");
-		getline(cin, src);
-		while(!map.isVertexInGraph(src))   // 未找到这个起点
-		{
-			if(src.size() > 2   // 长度大于2
-				&& src.substr(src.size() - 2, src.size()) == "站"   // 最后一个字是"站"
-				&& map.isVertexInGraph(src.substr(0, src.size() - 2)))   // 去掉"站"字后该点存在
-			{
-				src = src.substr(0, src.size() - 2);   // 用户输入多了一个"站"字，去掉即可
-				break;
-			}
-			printf("\n未查找到您输入的地址，请重新输入起点：");
-			getline(cin, src);
-		}
-
-		printf("\n请输入终点：");
-		getline(cin, dst);
-		while(!map.isVertexInGraph(dst) || dst == src)   // 未找到这个终点或起点与终点相同
-		{
-			if(dst.size() > 2 && dst.substr(dst.size() - 2, dst.size()) == "站"
-				&& map.isVertexInGraph(dst.substr(0, dst.size() - 2))
-				&& dst.substr(0, dst.size() - 2) != src)   // 去掉"站"字后不与起点相同
-			{
-				dst = dst.substr(0, dst.size() - 2);   // 用户输入多了一个"站"字，去掉即可
-				break;
-			}
-			printf("\n未查找到您输入的地址或终点与起点相同，请重新输入终点：");
-			getline(cin, dst);
-		}
-
+		fflush(stdin);
+		inputSrc(src);
+		inputDst(dst, src);
 		printf("\n请选择乘车方案：\n");
 		printf("     1 - 时间短\n");
 		printf("     2 - 少换乘\n");
@@ -358,13 +448,12 @@ int main1()
 		switch(choice[0])
 		{
 			case '1':system("cls"); map.lessTime(src, dst);     break;
-			case '2':system("cls"); map.lessTransfer(src, dst); break;
-			case '3':system("cls"); map.subwayOnly(src, dst);     break;
+			case '2':system("cls");  map.lessTransfer(src, dst); break;
+			case '3':system("cls"); map.subwayOnly(src, dst);   break;
 
 			default:printf("输入错误，请重新输入。"); system("pause"); break;
 		}
 	}
-
 	return 0;
 }
 
