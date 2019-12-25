@@ -8,3 +8,6 @@
 2. 交通图至少应有20个结点代表各站点信息；
 3. 能够保留各站点之间的交通方式以及预计通行时间；
 4. 设计不止一种个性化的换乘方案，如时间最短、换乘次数最少、花费最小等。
+
+
+![image](https://github.com/hyp19991114/Data-Structure-Curriculum-design/blob/master/beijing.png)
